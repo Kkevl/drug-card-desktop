@@ -37,6 +37,20 @@ EXAM_ITEMS_TABLE = "exam_items"
 EXAM_RESULTS_TABLE = "exam_results"
 EXAM_RESULT_ITEMS_TABLE = "exam_result_items"
 CSV_IMPORT_ENCODINGS = ("utf-8-sig", "utf-8", "cp950", "big5", "gb18030")
+CARD_EXPORT_FIELDNAMES = [
+    "id",
+    "drug_name",
+    "category",
+    "mechanism",
+    "key_points",
+    "side_effects",
+    "note",
+    "familiarity",
+    "review_count",
+    "last_reviewed_at",
+    "created_at",
+    "updated_at",
+]
 
 
 class DrugCardDatabase:
@@ -438,6 +452,9 @@ class DrugCardDatabase:
             except csv.Error as exc:
                 last_error = exc
                 continue
+            except ValueError as exc:
+                last_error = exc
+                continue
 
             imported_count = self._import_csv_rows(rows)
             return imported_count, encoding
@@ -455,8 +472,10 @@ class DrugCardDatabase:
     def _read_csv_rows(self, csv_path: Path, encoding: str) -> list[dict[str, str]]:
         with csv_path.open("r", encoding=encoding, newline="") as file:
             reader = csv.DictReader(file)
-            if reader.fieldnames is None:
-                return []
+            if not self._csv_fieldnames_are_reasonable(reader.fieldnames):
+                raise ValueError(
+                    "CSV 欄位名稱不符合格式，至少需要 drug_name 欄位。"
+                )
             return [
                 {
                     str(key): self._csv_text(value)
@@ -497,25 +516,41 @@ class DrugCardDatabase:
 
     def export_csv(self, csv_path: Path | str) -> int:
         cards = self.list_cards()
-        fieldnames = [
-            "id",
-            "drug_name",
-            "category",
-            "mechanism",
-            "key_points",
-            "side_effects",
-            "note",
-            "familiarity",
-            "review_count",
-            "last_reviewed_at",
-            "created_at",
-            "updated_at",
-        ]
         with Path(csv_path).open("w", encoding="utf-8-sig", newline="") as file:
-            writer = csv.DictWriter(file, fieldnames=fieldnames)
+            writer = csv.DictWriter(file, fieldnames=CARD_EXPORT_FIELDNAMES)
             writer.writeheader()
             for card in cards:
-                writer.writerow({field: getattr(card, field) for field in fieldnames})
+                writer.writerow(
+                    {field: self._csv_text(getattr(card, field)) for field in CARD_EXPORT_FIELDNAMES}
+                )
+        return len(cards)
+
+    def export_xlsx(self, xlsx_path: Path | str) -> int:
+        try:
+            from openpyxl import Workbook
+        except ImportError as exc:
+            raise RuntimeError(
+                "缺少 openpyxl 套件，無法匯出 Excel 檔案。請重新安裝 requirements.txt。"
+            ) from exc
+
+        cards = self.list_cards()
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "Drug Cards"
+        sheet.append(CARD_EXPORT_FIELDNAMES)
+        for card in cards:
+            sheet.append(
+                [self._csv_text(getattr(card, field)) for field in CARD_EXPORT_FIELDNAMES]
+            )
+
+        for column_cells in sheet.columns:
+            max_length = max(len(str(cell.value or "")) for cell in column_cells)
+            sheet.column_dimensions[column_cells[0].column_letter].width = min(
+                max(max_length + 2, 12),
+                48,
+            )
+
+        workbook.save(xlsx_path)
         return len(cards)
 
     def _card_values(self, card: DrugCard, include_review: bool) -> tuple[object, ...]:
@@ -544,6 +579,13 @@ class DrugCardDatabase:
         if isinstance(value, bytes):
             return value.decode("utf-8", errors="replace")
         return str(value)
+
+    @staticmethod
+    def _csv_fieldnames_are_reasonable(fieldnames: list[str] | None) -> bool:
+        if not fieldnames:
+            return False
+        normalized = {str(field).strip().lstrip("\ufeff") for field in fieldnames}
+        return "drug_name" in normalized
 
     @staticmethod
     def _normal_familiarity(value: str) -> str:

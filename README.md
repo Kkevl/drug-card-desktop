@@ -238,6 +238,9 @@ cyclooxygenase inhibitor
 如果你用 Windows Excel 編輯 CSV，通常也可以正常匯入中文。  
 匯入完成後，提示訊息會顯示本次使用的編碼。
 
+如果匯入後軟體內也顯示亂碼，通常代表 CSV 在匯入時已經被錯誤解碼。  
+這種已寫入資料庫的亂碼資料通常無法自動修復，建議刪除亂碼資料後，從原始 CSV 重新匯入。
+
 CSV 至少要有 `drug_name` 欄位。
 
 建議欄位如下：
@@ -266,6 +269,19 @@ drug_name,category,mechanism,key_points,side_effects,note,familiarity
 CSV 可以用 Excel、Google Sheets 或文字編輯器開啟。
 
 軟體匯出時會使用 `UTF-8 BOM` 格式，讓 Windows Excel 直接開啟時中文比較不容易亂碼。
+
+如果你直接打開 CSV 還是看到中文亂碼，可以改用 Excel 的「資料匯入」功能，並選擇 UTF-8 編碼。
+
+## 匯出 Excel .xlsx
+
+如果主要是給 Excel 使用，建議優先匯出 `.xlsx`。
+
+1. 按 `設定`。
+2. 按 `匯出 Excel .xlsx`。
+3. 選擇要儲存的位置。
+4. 用 Excel 開啟匯出的 `.xlsx` 檔案。
+
+`.xlsx` 比 CSV 更不容易遇到中文亂碼，適合直接交給客戶查看或編輯。
 
 ## 資料存在哪裡
 
@@ -333,6 +349,16 @@ DrugCards.exe
 1. 刪除亂碼卡片，或改用乾淨的資料庫備份。
 2. 找回原始 CSV。
 3. 用新版軟體重新匯入。
+
+### 直接開啟 CSV 看到中文亂碼怎麼辦？
+
+這通常是 Excel 或記事本猜錯 CSV 編碼，不一定是軟體資料壞掉。
+
+建議優先嘗試：
+
+1. 改用 `匯出 Excel .xlsx`。
+2. 或重新用 `匯出 CSV` 產生 UTF-8 BOM 格式的 CSV。
+3. 或在 Excel 中使用「資料匯入」功能，手動選擇 UTF-8 編碼。
 
 ### 為什麼答案看起來差不多卻算錯？
 

@@ -329,6 +329,7 @@ class SettingsDialog(QDialog):
         database_help_button = QPushButton("資料庫說明")
         import_button = QPushButton("匯入 CSV")
         export_button = QPushButton("匯出 CSV")
+        export_xlsx_button = QPushButton("匯出 Excel .xlsx")
         close_button = QPushButton("關閉")
 
         add_button.clicked.connect(self.main_window.add_card)
@@ -338,9 +339,16 @@ class SettingsDialog(QDialog):
         database_help_button.clicked.connect(self.main_window.show_database_help)
         import_button.clicked.connect(self.main_window.import_csv)
         export_button.clicked.connect(self.main_window.export_csv)
+        export_xlsx_button.clicked.connect(self.main_window.export_xlsx)
         close_button.clicked.connect(self.accept)
 
         layout = QVBoxLayout(self)
+        csv_hint = QLabel(
+            "若直接開啟 CSV 看到中文亂碼，請使用本軟體的 UTF-8 BOM 匯出，"
+            "或改用 Excel 的資料匯入功能選擇 UTF-8 編碼。"
+        )
+        csv_hint.setWordWrap(True)
+
         layout.addWidget(add_button)
         layout.addWidget(edit_button)
         layout.addWidget(delete_button)
@@ -348,8 +356,10 @@ class SettingsDialog(QDialog):
         layout.addWidget(exam_items_button)
         layout.addWidget(database_help_button)
         layout.addSpacing(12)
+        layout.addWidget(csv_hint)
         layout.addWidget(import_button)
         layout.addWidget(export_button)
+        layout.addWidget(export_xlsx_button)
         layout.addStretch()
         layout.addWidget(close_button)
 
@@ -982,7 +992,31 @@ class MainWindow(QMainWindow):
         QMessageBox.information(
             self,
             "匯出完成",
-            f"已匯出 {exported_count} 張卡片。\n已用 UTF-8 BOM 格式匯出，可用 Excel 開啟。",
+            f"已匯出 {exported_count} 張卡片。\n已用 UTF-8 BOM 格式匯出，建議用 Excel 開啟。",
+        )
+
+    def export_xlsx(self) -> None:
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "匯出 Excel 檔案",
+            "drug_cards_export.xlsx",
+            "Excel Files (*.xlsx);;All Files (*)",
+        )
+        if not path:
+            return
+        if not path.lower().endswith(".xlsx"):
+            path = f"{path}.xlsx"
+
+        try:
+            exported_count = self.db.export_xlsx(path)
+        except Exception as exc:
+            QMessageBox.critical(self, "匯出失敗", f"Excel 匯出失敗：\n{exc}")
+            return
+
+        QMessageBox.information(
+            self,
+            "匯出完成",
+            f"已匯出 {exported_count} 張卡片。\n已匯出 Excel 檔案，建議優先使用此格式避免中文亂碼。",
         )
 
     def _clear_exam_answer_form(self) -> None:
