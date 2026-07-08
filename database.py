@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import shutil
 import sqlite3
 import sys
 from datetime import datetime
@@ -17,12 +18,25 @@ def app_base_dir() -> Path:
     return Path(__file__).resolve().parent
 
 
-DB_PATH = app_base_dir() / "drug_cards.db"
+def resolve_database_path() -> Path:
+    base_dir = app_base_dir()
+    data_dir = base_dir / "data"
+    data_db = data_dir / "drug_cards.db"
+    legacy_db = base_dir / "drug_cards.db"
+
+    data_dir.mkdir(parents=True, exist_ok=True)
+    if not data_db.exists() and legacy_db.exists():
+        shutil.copy2(legacy_db, data_db)
+    return data_db
+
+
+DB_PATH = resolve_database_path()
 TABLE_NAME = "cards"
 LEGACY_TABLE_NAME = "drug_cards"
 EXAM_ITEMS_TABLE = "exam_items"
 EXAM_RESULTS_TABLE = "exam_results"
 EXAM_RESULT_ITEMS_TABLE = "exam_result_items"
+CSV_IMPORT_ENCODINGS = ("utf-8-sig", "utf-8", "cp950", "big5", "gb18030")
 
 
 class DrugCardDatabase:
@@ -411,35 +425,74 @@ class DrugCardDatabase:
                 )
             return result_id
 
-    def import_csv(self, csv_path: Path | str) -> int:
-        imported_count = 0
-        with Path(csv_path).open("r", encoding="utf-8-sig", newline="") as file:
+    def import_csv(self, csv_path: Path | str) -> tuple[int, str]:
+        csv_file = Path(csv_path)
+        last_error: Exception | None = None
+
+        for encoding in CSV_IMPORT_ENCODINGS:
+            try:
+                rows = self._read_csv_rows(csv_file, encoding)
+            except UnicodeDecodeError as exc:
+                last_error = exc
+                continue
+            except csv.Error as exc:
+                last_error = exc
+                continue
+
+            imported_count = self._import_csv_rows(rows)
+            return imported_count, encoding
+
+        raise UnicodeError(
+            "無法讀取 CSV 編碼。已嘗試："
+            + ", ".join(CSV_IMPORT_ENCODINGS)
+            + (
+                f"\n最後錯誤：{last_error}"
+                if last_error
+                else "\n請確認檔案是有效的 CSV。"
+            )
+        )
+
+    def _read_csv_rows(self, csv_path: Path, encoding: str) -> list[dict[str, str]]:
+        with csv_path.open("r", encoding=encoding, newline="") as file:
             reader = csv.DictReader(file)
-            with self.connect() as conn:
-                for row in reader:
-                    card = DrugCard(
-                        id=None,
-                        drug_name=(row.get("drug_name") or "").strip(),
-                        category=row.get("category") or "",
-                        mechanism=row.get("mechanism") or "",
-                        key_points=row.get("key_points") or "",
-                        side_effects=row.get("side_effects") or "",
-                        note=row.get("note") or "",
-                        familiarity=row.get("familiarity") or DEFAULT_FAMILIARITY,
+            if reader.fieldnames is None:
+                return []
+            return [
+                {
+                    str(key): self._csv_text(value)
+                    for key, value in row.items()
+                    if key is not None
+                }
+                for row in reader
+            ]
+
+    def _import_csv_rows(self, rows: list[dict[str, str]]) -> int:
+        imported_count = 0
+        with self.connect() as conn:
+            for row in rows:
+                card = DrugCard(
+                    id=None,
+                    drug_name=self._csv_text(row.get("drug_name")).strip(),
+                    category=self._csv_text(row.get("category")),
+                    mechanism=self._csv_text(row.get("mechanism")),
+                    key_points=self._csv_text(row.get("key_points")),
+                    side_effects=self._csv_text(row.get("side_effects")),
+                    note=self._csv_text(row.get("note")),
+                    familiarity=self._csv_text(row.get("familiarity")) or DEFAULT_FAMILIARITY,
+                )
+                if not card.drug_name:
+                    continue
+                conn.execute(
+                    f"""
+                    INSERT INTO {TABLE_NAME} (
+                        drug_name, category, mechanism, key_points, side_effects,
+                        note, familiarity, review_count, last_reviewed_at
                     )
-                    if not card.drug_name:
-                        continue
-                    conn.execute(
-                        f"""
-                        INSERT INTO {TABLE_NAME} (
-                            drug_name, category, mechanism, key_points, side_effects,
-                            note, familiarity, review_count, last_reviewed_at
-                        )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        self._card_values(card, include_review=True),
-                    )
-                    imported_count += 1
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    self._card_values(card, include_review=True),
+                )
+                imported_count += 1
         return imported_count
 
     def export_csv(self, csv_path: Path | str) -> int:
@@ -483,6 +536,14 @@ class DrugCardDatabase:
                 ]
             )
         return tuple(values)
+
+    @staticmethod
+    def _csv_text(value: object) -> str:
+        if value is None:
+            return ""
+        if isinstance(value, bytes):
+            return value.decode("utf-8", errors="replace")
+        return str(value)
 
     @staticmethod
     def _normal_familiarity(value: str) -> str:

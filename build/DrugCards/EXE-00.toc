@@ -62,7 +62,7 @@
  [],
  False,
  False,
- 1783513525,
+ 1783530024,
  [('runw.exe',
    'D:\\雜項\\drug-card-desktop\\.venv\\Lib\\site-packages\\PyInstaller\\bootloader\\Windows-64bit-intel\\runw.exe',
    'EXECUTABLE')],

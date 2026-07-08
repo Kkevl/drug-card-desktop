@@ -35,7 +35,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from database import DrugCardDatabase
+from database import DB_PATH, DrugCardDatabase
 from models import DEFAULT_FAMILIARITY, FAMILIARITY_LEVELS, DrugCard, ExamItem, ExamQuestion
 
 
@@ -326,6 +326,7 @@ class SettingsDialog(QDialog):
         edit_button = QPushButton("編輯目前卡片")
         delete_button = QPushButton("刪除目前卡片")
         exam_items_button = QPushButton("考試項目管理")
+        database_help_button = QPushButton("資料庫說明")
         import_button = QPushButton("匯入 CSV")
         export_button = QPushButton("匯出 CSV")
         close_button = QPushButton("關閉")
@@ -334,6 +335,7 @@ class SettingsDialog(QDialog):
         edit_button.clicked.connect(self.main_window.edit_card)
         delete_button.clicked.connect(self.main_window.delete_card)
         exam_items_button.clicked.connect(self.main_window.open_exam_item_manager)
+        database_help_button.clicked.connect(self.main_window.show_database_help)
         import_button.clicked.connect(self.main_window.import_csv)
         export_button.clicked.connect(self.main_window.export_csv)
         close_button.clicked.connect(self.accept)
@@ -344,6 +346,7 @@ class SettingsDialog(QDialog):
         layout.addWidget(delete_button)
         layout.addSpacing(12)
         layout.addWidget(exam_items_button)
+        layout.addWidget(database_help_button)
         layout.addSpacing(12)
         layout.addWidget(import_button)
         layout.addWidget(export_button)
@@ -674,6 +677,19 @@ class MainWindow(QMainWindow):
     def open_exam_item_manager(self) -> None:
         ExamItemManagerDialog(self).exec()
 
+    def show_database_help(self) -> None:
+        QMessageBox.information(
+            self,
+            "資料庫說明",
+            "目前資料會儲存在軟體資料夾底下的 data\\drug_cards.db。\n\n"
+            f"目前使用的資料庫：\n{DB_PATH}\n\n"
+            "一般使用者建議用軟體內的設定功能新增、編輯、刪除資料，"
+            "或使用 CSV 匯入 / 匯出大量編輯。\n\n"
+            "備份資料：關閉軟體後，複製 data\\drug_cards.db 到安全位置。\n\n"
+            "更換資料庫：關閉軟體後，用另一個 drug_cards.db 覆蓋 data\\drug_cards.db，"
+            "再重新開啟軟體。",
+        )
+
     def reload_categories(self) -> None:
         current_category = self.category_combo.currentData() or ""
         self.category_combo.blockSignals(True)
@@ -932,14 +948,18 @@ class MainWindow(QMainWindow):
             return
 
         try:
-            imported_count = self.db.import_csv(path)
+            imported_count, encoding = self.db.import_csv(path)
         except Exception as exc:
             QMessageBox.critical(self, "匯入失敗", f"CSV 匯入失敗：\n{exc}")
             return
 
         self.reload_categories()
         self.refresh_cards()
-        QMessageBox.information(self, "匯入完成", f"已匯入 {imported_count} 張卡片。")
+        QMessageBox.information(
+            self,
+            "匯入完成",
+            f"已使用 {encoding} 匯入 {imported_count} 張卡片。",
+        )
 
     def export_csv(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
@@ -959,7 +979,11 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "匯出失敗", f"CSV 匯出失敗：\n{exc}")
             return
 
-        QMessageBox.information(self, "匯出完成", f"已匯出 {exported_count} 張卡片。")
+        QMessageBox.information(
+            self,
+            "匯出完成",
+            f"已匯出 {exported_count} 張卡片。\n已用 UTF-8 BOM 格式匯出，可用 Excel 開啟。",
+        )
 
     def _clear_exam_answer_form(self) -> None:
         while self.exam_answers_layout.count():
@@ -1209,4 +1233,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
