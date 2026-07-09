@@ -4,6 +4,7 @@ import html
 import random
 import sys
 from datetime import datetime
+from typing import Dict, List, Optional
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction
@@ -47,7 +48,11 @@ def normalize_answer(value: str) -> str:
 
 
 class DrugCardDialog(QDialog):
-    def __init__(self, parent: QWidget | None = None, card: DrugCard | None = None) -> None:
+    def __init__(
+        self,
+        parent: Optional[QWidget] = None,
+        card: Optional[DrugCard] = None,
+    ) -> None:
         super().__init__(parent)
         self.setWindowTitle("編輯藥物" if card else "新增藥物")
         self.setMinimumWidth(560)
@@ -125,9 +130,9 @@ class DrugCardDialog(QDialog):
 class ExamItemDialog(QDialog):
     def __init__(
         self,
-        parent: QWidget | None,
+        parent: Optional[QWidget],
         card_id: int,
-        item: ExamItem | None = None,
+        item: Optional[ExamItem] = None,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("編輯考試項目" if item else "新增考試項目")
@@ -191,8 +196,8 @@ class ExamItemManagerDialog(QDialog):
         super().__init__(parent)
         self.main_window = parent
         self.db = parent.db
-        self.cards: list[DrugCard] = []
-        self.items: list[ExamItem] = []
+        self.cards: List[DrugCard] = []
+        self.items: List[ExamItem] = []
 
         self.setWindowTitle("考試項目管理")
         self.resize(720, 520)
@@ -244,11 +249,11 @@ class ExamItemManagerDialog(QDialog):
         self.card_combo.blockSignals(False)
         self.reload_items()
 
-    def current_card_id(self) -> int | None:
+    def current_card_id(self) -> Optional[int]:
         card_id = self.card_combo.currentData()
         return int(card_id) if card_id is not None else None
 
-    def current_item(self) -> ExamItem | None:
+    def current_item(self) -> Optional[ExamItem]:
         selected = self.item_list.currentItem()
         if not selected:
             return None
@@ -368,20 +373,20 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.db = DrugCardDatabase()
-        self.cards: list[DrugCard] = []
+        self.cards: List[DrugCard] = []
         self.current_index = 0
         self.is_back_visible = False
         self._updating_familiarity_buttons = False
 
-        self.exam_questions: list[ExamQuestion] = []
+        self.exam_questions: List[ExamQuestion] = []
         self.exam_current_index = 0
         self.exam_started_at = ""
-        self.exam_result_items: list[dict[str, object]] = []
+        self.exam_result_items: List[Dict[str, object]] = []
         self.exam_current_checked = False
-        self.exam_answer_inputs: dict[int, QTextEdit] = {}
+        self.exam_answer_inputs: Dict[int, QTextEdit] = {}
         self.exam_last_scope = "all"
         self.exam_last_category = ""
-        self.exam_last_count: int | None = None
+        self.exam_last_count: Optional[int] = None
 
         self.setWindowTitle(APP_TITLE)
         self.resize(1040, 760)
@@ -536,7 +541,7 @@ class MainWindow(QMainWindow):
 
         self.familiarity_widget = QWidget()
         self.familiarity_group = QButtonGroup(self)
-        self.familiarity_buttons: dict[str, QRadioButton] = {}
+        self.familiarity_buttons: Dict[str, QRadioButton] = {}
         familiarity_layout = QHBoxLayout(self.familiarity_widget)
         familiarity_layout.setContentsMargins(0, 0, 0, 0)
         familiarity_layout.addStretch()
@@ -733,7 +738,7 @@ class MainWindow(QMainWindow):
 
     def refresh_cards(
         self,
-        keep_current_id: int | None = None,
+        keep_current_id: Optional[int] = None,
         reset_side: bool = True,
     ) -> None:
         self.cards = self.db.list_cards(
@@ -782,7 +787,7 @@ class MainWindow(QMainWindow):
         for button in self.familiarity_buttons.values():
             button.setEnabled(enabled)
 
-    def current_card(self) -> DrugCard | None:
+    def current_card(self) -> Optional[DrugCard]:
         if not self.cards:
             return None
         return self.cards[self.current_index]
@@ -820,7 +825,7 @@ class MainWindow(QMainWindow):
             self.familiarity_widget.setVisible(False)
             self.flip_button.setText("翻面")
 
-    def _sync_familiarity_buttons(self, card: DrugCard | None) -> None:
+    def _sync_familiarity_buttons(self, card: Optional[DrugCard]) -> None:
         self._updating_familiarity_buttons = True
         self.familiarity_group.setExclusive(False)
         for level, button in self.familiarity_buttons.items():
@@ -1025,7 +1030,7 @@ class MainWindow(QMainWindow):
                 item.widget().deleteLater()
         self.exam_answer_inputs.clear()
 
-    def _exam_count_limit(self) -> int | None:
+    def _exam_count_limit(self) -> Optional[int]:
         value = self.exam_count_combo.currentData()
         if value == "custom":
             return self.exam_custom_count_spin.value()
@@ -1048,7 +1053,7 @@ class MainWindow(QMainWindow):
         self,
         scope: str,
         category: str,
-        count_limit: int | None,
+        count_limit: Optional[int],
     ) -> None:
         if scope == "category" and not category:
             QMessageBox.information(self, "沒有分類", "目前沒有可選擇的分類。")
@@ -1062,7 +1067,7 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "沒有卡片", "目前考試範圍內沒有卡片。")
             return
 
-        questions: list[ExamQuestion] = []
+        questions: List[ExamQuestion] = []
         for card in cards:
             if card.id is None:
                 continue

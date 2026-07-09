@@ -6,7 +6,7 @@ PYTHON_BIN="${PYTHON_BIN:-python3}"
 
 check_python_version() {
     "$1" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 9) else 1)' || {
-        echo "Python 3.9 or newer is required."
+        echo "Python version is too old. Python 3.9 or newer is required."
         echo "Current Python:"
         "$1" --version || true
         exit 1

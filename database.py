@@ -10,6 +10,7 @@ from datetime import datetime
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Union
 
 from models import DEFAULT_FAMILIARITY, FAMILIARITY_LEVELS, DrugCard, ExamItem
 
@@ -103,7 +104,7 @@ CARD_EXPORT_FIELDNAMES = [
 
 
 class DrugCardDatabase:
-    def __init__(self, db_path: Path | str | None = None) -> None:
+    def __init__(self, db_path: Optional[Union[Path, str]] = None) -> None:
         self.db_path = Path(db_path) if db_path is not None else resolve_database_path()
         self.initialize()
 
@@ -241,9 +242,9 @@ class DrugCardDatabase:
         search_text: str = "",
         category: str = "",
         unfamiliar_only: bool = False,
-    ) -> list[DrugCard]:
-        clauses: list[str] = []
-        params: list[str] = []
+    ) -> List[DrugCard]:
+        clauses: List[str] = []
+        params: List[str] = []
 
         if search_text.strip():
             clauses.append("drug_name LIKE ?")
@@ -271,7 +272,7 @@ class DrugCardDatabase:
             ).fetchall()
         return [self._row_to_card(row) for row in rows]
 
-    def list_categories(self) -> list[str]:
+    def list_categories(self) -> List[str]:
         with self.connect() as conn:
             rows = conn.execute(
                 f"""
@@ -362,7 +363,7 @@ class DrugCardDatabase:
             conn.execute(f"DELETE FROM {EXAM_ITEMS_TABLE} WHERE card_id = ?", (card_id,))
             conn.execute(f"DELETE FROM {TABLE_NAME} WHERE id = ?", (card_id,))
 
-    def list_exam_items(self, card_id: int) -> list[ExamItem]:
+    def list_exam_items(self, card_id: int) -> List[ExamItem]:
         with self.connect() as conn:
             rows = conn.execute(
                 f"""
@@ -428,7 +429,7 @@ class DrugCardDatabase:
         accuracy: float,
         mode: str,
         category: str,
-        result_items: list[dict[str, object]],
+        result_items: List[Dict[str, object]],
     ) -> int:
         finished_at = datetime.now().isoformat(timespec="seconds")
         with self.connect() as conn:
@@ -443,7 +444,7 @@ class DrugCardDatabase:
             )
             result_id = int(cursor.lastrowid)
 
-            per_card: dict[int, dict[str, int]] = {}
+            per_card: Dict[int, Dict[str, int]] = {}
             for item in result_items:
                 card_id = int(item["card_id"])
                 score = int(item["score"])
@@ -488,9 +489,9 @@ class DrugCardDatabase:
                 )
             return result_id
 
-    def import_csv(self, csv_path: Path | str) -> tuple[int, str]:
+    def import_csv(self, csv_path: Union[Path, str]) -> Tuple[int, str]:
         csv_file = Path(csv_path)
-        last_error: Exception | None = None
+        last_error: Optional[Exception] = None
 
         for encoding in CSV_IMPORT_ENCODINGS:
             try:
@@ -518,7 +519,7 @@ class DrugCardDatabase:
             )
         )
 
-    def _read_csv_rows(self, csv_path: Path, encoding: str) -> list[dict[str, str]]:
+    def _read_csv_rows(self, csv_path: Path, encoding: str) -> List[Dict[str, str]]:
         with csv_path.open("r", encoding=encoding, newline="") as file:
             reader = csv.DictReader(file)
             if not self._csv_fieldnames_are_reasonable(reader.fieldnames):
@@ -534,7 +535,7 @@ class DrugCardDatabase:
                 for row in reader
             ]
 
-    def _import_csv_rows(self, rows: list[dict[str, str]]) -> int:
+    def _import_csv_rows(self, rows: List[Dict[str, str]]) -> int:
         imported_count = 0
         with self.connect() as conn:
             for row in rows:
@@ -563,7 +564,7 @@ class DrugCardDatabase:
                 imported_count += 1
         return imported_count
 
-    def export_csv(self, csv_path: Path | str) -> int:
+    def export_csv(self, csv_path: Union[Path, str]) -> int:
         cards = self.list_cards()
         with Path(csv_path).open("w", encoding="utf-8-sig", newline="") as file:
             writer = csv.DictWriter(file, fieldnames=CARD_EXPORT_FIELDNAMES)
@@ -574,7 +575,7 @@ class DrugCardDatabase:
                 )
         return len(cards)
 
-    def export_xlsx(self, xlsx_path: Path | str) -> int:
+    def export_xlsx(self, xlsx_path: Union[Path, str]) -> int:
         try:
             from openpyxl import Workbook
         except ImportError as exc:
@@ -602,8 +603,8 @@ class DrugCardDatabase:
         workbook.save(xlsx_path)
         return len(cards)
 
-    def _card_values(self, card: DrugCard, include_review: bool) -> tuple[object, ...]:
-        values: list[object] = [
+    def _card_values(self, card: DrugCard, include_review: bool) -> Tuple[object, ...]:
+        values: List[object] = [
             card.drug_name.strip(),
             card.category.strip(),
             card.mechanism.strip(),
@@ -630,7 +631,7 @@ class DrugCardDatabase:
         return str(value)
 
     @staticmethod
-    def _csv_fieldnames_are_reasonable(fieldnames: list[str] | None) -> bool:
+    def _csv_fieldnames_are_reasonable(fieldnames: Optional[List[str]]) -> bool:
         if not fieldnames:
             return False
         normalized = {str(field).strip().lstrip("\ufeff") for field in fieldnames}
