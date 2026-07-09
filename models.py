@@ -5,7 +5,7 @@ FAMILIARITY_LEVELS = ("不熟", "普通", "熟")
 DEFAULT_FAMILIARITY = "普通"
 
 
-@dataclass(slots=True)
+@dataclass
 class DrugCard:
     id: int | None
     drug_name: str
@@ -21,7 +21,7 @@ class DrugCard:
     updated_at: str | None = None
 
 
-@dataclass(slots=True)
+@dataclass
 class ExamItem:
     id: int | None
     card_id: int
@@ -32,7 +32,7 @@ class ExamItem:
     updated_at: str | None = None
 
 
-@dataclass(slots=True)
+@dataclass
 class ExamQuestion:
     card: DrugCard
     items: list[ExamItem]

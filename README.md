@@ -50,6 +50,9 @@ bash run_macos.sh
 第一次執行時，腳本會自動建立 `.venv` 並安裝需要的套件。  
 之後再執行同一個指令即可開啟程式。
 
+macOS 原始碼執行需要 Python 3.9 或更新版本。  
+如果 Python 太舊，腳本會停止並顯示目前版本。
+
 ## 主畫面介紹
 
 程式上方有兩個分頁：
@@ -458,6 +461,9 @@ source .venv/bin/activate
 pip install -r requirements.txt
 python main.py
 ```
+
+最低支援 Python 3.9。  
+如果 `.venv` 是用太舊的 Python 建立的，請刪除 `.venv` 後重新執行 `bash run_macos.sh`。
 
 ## 給維護者：重新打包
 
