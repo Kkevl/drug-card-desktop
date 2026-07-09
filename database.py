@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import csv
+import os
+import platform
 import shutil
 import sqlite3
 import sys
@@ -12,25 +14,72 @@ from pathlib import Path
 from models import DEFAULT_FAMILIARITY, FAMILIARITY_LEVELS, DrugCard, ExamItem
 
 
+APP_DATA_FOLDER_NAME = "DrugFlashcard"
+DATABASE_FILENAME = "drug_cards.db"
+
+
 def app_base_dir() -> Path:
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve().parent
     return Path(__file__).resolve().parent
 
 
+def user_data_dir() -> Path:
+    system = platform.system()
+    if system == "Windows":
+        appdata = os.environ.get("APPDATA")
+        base_dir = Path(appdata) if appdata else Path.home()
+        return base_dir / APP_DATA_FOLDER_NAME
+    if system == "Darwin":
+        return Path.home() / "Library" / "Application Support" / APP_DATA_FOLDER_NAME
+    return Path.home() / ".local" / "share" / APP_DATA_FOLDER_NAME
+
+
 def resolve_database_path() -> Path:
     base_dir = app_base_dir()
-    data_dir = base_dir / "data"
-    data_db = data_dir / "drug_cards.db"
-    legacy_db = base_dir / "drug_cards.db"
+    target_dir = user_data_dir()
+    target_db = target_dir / DATABASE_FILENAME
+    legacy_candidates = (
+        base_dir / "data" / DATABASE_FILENAME,
+        base_dir / DATABASE_FILENAME,
+    )
 
-    data_dir.mkdir(parents=True, exist_ok=True)
-    if not data_db.exists() and legacy_db.exists():
-        shutil.copy2(legacy_db, data_db)
-    return data_db
+    target_dir.mkdir(parents=True, exist_ok=True)
+    legacy_db = next((path for path in legacy_candidates if path.exists()), None)
+    if legacy_db and (
+        not target_db.exists()
+        or (
+            _database_card_count(target_db) == 0
+            and _database_card_count(legacy_db) > 0
+        )
+    ):
+        shutil.copy2(legacy_db, target_db)
+    return target_db
 
 
-DB_PATH = resolve_database_path()
+def _database_card_count(db_path: Path) -> int:
+    try:
+        with sqlite3.connect(db_path) as conn:
+            row = conn.execute(
+                """
+                SELECT 1
+                FROM sqlite_master
+                WHERE type = 'table' AND name IN ('cards', 'drug_cards')
+                LIMIT 1
+                """
+            ).fetchone()
+            if not row:
+                return 0
+            if conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'cards'"
+            ).fetchone():
+                return int(conn.execute("SELECT COUNT(*) FROM cards").fetchone()[0])
+            return int(conn.execute("SELECT COUNT(*) FROM drug_cards").fetchone()[0])
+    except sqlite3.Error:
+        return 0
+
+
+DB_PATH = user_data_dir() / DATABASE_FILENAME
 TABLE_NAME = "cards"
 LEGACY_TABLE_NAME = "drug_cards"
 EXAM_ITEMS_TABLE = "exam_items"
@@ -54,8 +103,8 @@ CARD_EXPORT_FIELDNAMES = [
 
 
 class DrugCardDatabase:
-    def __init__(self, db_path: Path | str = DB_PATH) -> None:
-        self.db_path = Path(db_path)
+    def __init__(self, db_path: Path | str | None = None) -> None:
+        self.db_path = Path(db_path) if db_path is not None else resolve_database_path()
         self.initialize()
 
     @contextmanager

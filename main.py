@@ -417,7 +417,7 @@ class MainWindow(QMainWindow):
         self.setStyleSheet(
             """
             QWidget {
-                font-family: "Microsoft JhengHei UI", "Segoe UI", sans-serif;
+                font-family: "PingFang TC", "Noto Sans CJK TC", "Microsoft JhengHei UI", "Segoe UI", sans-serif;
                 font-size: 14px;
             }
             QMainWindow, QTabWidget::pane {
@@ -691,13 +691,12 @@ class MainWindow(QMainWindow):
         QMessageBox.information(
             self,
             "資料庫說明",
-            "目前資料會儲存在軟體資料夾底下的 data\\drug_cards.db。\n\n"
+            "目前資料會儲存在目前使用者的應用程式資料目錄，不會寫入 exe 或 app bundle 內。\n\n"
             f"目前使用的資料庫：\n{DB_PATH}\n\n"
             "一般使用者建議用軟體內的設定功能新增、編輯、刪除資料，"
             "或使用 CSV 匯入 / 匯出大量編輯。\n\n"
-            "備份資料：關閉軟體後，複製 data\\drug_cards.db 到安全位置。\n\n"
-            "更換資料庫：關閉軟體後，用另一個 drug_cards.db 覆蓋 data\\drug_cards.db，"
-            "再重新開啟軟體。",
+            "備份資料：關閉軟體後，複製上方顯示的 drug_cards.db 到安全位置。\n\n"
+            "更換資料庫：關閉軟體後，用另一個 drug_cards.db 覆蓋上方顯示的檔案，再重新開啟軟體。",
         )
 
     def reload_categories(self) -> None:

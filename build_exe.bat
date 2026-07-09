@@ -7,5 +7,5 @@ if not exist ".venv\Scripts\pyinstaller.exe" (
     ".venv\Scripts\python.exe" -m pip install -r requirements.txt
 )
 
-".venv\Scripts\pyinstaller.exe" --noconfirm --windowed --name DrugCards main.py
+".venv\Scripts\pyinstaller.exe" --noconfirm --windowed --name DrugFlashcard main.py
 

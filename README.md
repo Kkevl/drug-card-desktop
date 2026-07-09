@@ -1,21 +1,31 @@
 # 藥物記憶卡 使用說明
 
-這是一個可以在 Windows 電腦上離線使用的藥物記憶卡軟體。  
+這是一個可以在 Windows 11 與 macOS 上離線使用的藥物記憶卡軟體。  
 不需要網路、不需要登入帳號，也不需要開瀏覽器。
 
 ## 快速開始
 
-### 如果你拿到的是已打包好的版本
+### 如果你拿到的是 Windows 已打包版本
 
-1. 打開 `DrugCards` 資料夾。
-2. 找到 `DrugCards.exe`。
-3. 用滑鼠左鍵雙擊 `DrugCards.exe`。
+1. 打開 `DrugFlashcard` 資料夾。
+2. 找到 `DrugFlashcard.exe`。
+3. 用滑鼠左鍵雙擊 `DrugFlashcard.exe`。
 4. 程式打開後就可以開始使用。
 
-請不要只複製 `DrugCards.exe` 一個檔案。  
-如果要把軟體交給別人，請複製整個 `DrugCards` 資料夾。
+請不要只複製 `DrugFlashcard.exe` 一個檔案。  
+如果要把軟體交給別人，請複製整個 `DrugFlashcard` 資料夾。
 
-### 如果你是在目前專案資料夾中使用
+### 如果你拿到的是 macOS 已打包版本
+
+1. 找到 `DrugFlashcard.app`。
+2. 雙擊 `DrugFlashcard.app`。
+3. 如果 macOS 擋下未簽章 app，測試版可嘗試右鍵點 app，選擇 `打開`。
+
+Windows 的 `.exe` 不能直接給 Mac 使用。  
+macOS 的 `.app` 也不能直接在 Windows 執行。  
+同一份原始碼可以共用，但發佈檔需要分平台產生。
+
+### 如果你是在 Windows 原始碼資料夾中使用
 
 1. 打開你下載或解壓縮後的軟體資料夾。
 2. 找到 `run_app.bat`。
@@ -23,6 +33,22 @@
 4. 如果 Windows 跳出安全提醒，確認這是你自己的檔案後選擇繼續執行。
 
 平常使用時，不需要打開 `main.py`，也不需要自己輸入指令。
+
+### 如果你是在 macOS 原始碼資料夾中使用
+
+一般使用者建議使用已打包的 `.app`。  
+如果你是在 macOS 上拿到原始碼資料夾，也可以用內建腳本啟動：
+
+1. 打開 `終端機 Terminal`。
+2. 把目前位置切到軟體資料夾。
+3. 執行：
+
+```bash
+bash run_macos.sh
+```
+
+第一次執行時，腳本會自動建立 `.venv` 並安裝需要的套件。  
+之後再執行同一個指令即可開啟程式。
 
 ## 主畫面介紹
 
@@ -116,10 +142,22 @@
 資料庫檔案名稱是：
 
 ```text
-data\drug_cards.db
+drug_cards.db
 ```
 
-也就是說，軟體資料夾裡會有一個 `data` 資料夾，裡面放你的卡片資料。
+資料庫不會放在 exe 或 app bundle 裡，而是放在目前使用者的應用程式資料目錄。
+
+Windows 預設位置：
+
+```text
+%APPDATA%\DrugFlashcard\drug_cards.db
+```
+
+macOS 預設位置：
+
+```text
+~/Library/Application Support/DrugFlashcard/drug_cards.db
+```
 
 請注意：
 
@@ -285,17 +323,25 @@ CSV 可以用 Excel、Google Sheets 或文字編輯器開啟。
 
 ## 資料存在哪裡
 
-資料會存在軟體資料夾裡的：
+資料會存在目前使用者的應用程式資料目錄。
+
+Windows：
 
 ```text
-data\drug_cards.db
+%APPDATA%\DrugFlashcard\drug_cards.db
+```
+
+macOS：
+
+```text
+~/Library/Application Support/DrugFlashcard/drug_cards.db
 ```
 
 請不要隨便刪除這個檔案。  
-如果要備份資料，可以複製 `data\drug_cards.db` 到安全的位置。
+如果要備份資料，可以複製上方位置的 `drug_cards.db` 到安全的位置。
 
-如果你收到的是全新的軟體資料夾，第一次開啟時會自動建立資料庫。  
-如果你想使用自己的資料，可以用 CSV 匯入，或把自己的 `drug_cards.db` 放到 `data` 資料夾中。
+如果你第一次開啟軟體，程式會自動建立資料夾、資料庫與資料表。  
+如果你想使用自己的資料，建議用 CSV 匯入；進階使用者也可以關閉軟體後，用自己的 `drug_cards.db` 覆蓋上方位置的資料庫。
 
 舊版如果資料庫放在軟體資料夾根目錄：
 
@@ -306,7 +352,7 @@ drug_cards.db
 新版啟動時會自動複製到：
 
 ```text
-data\drug_cards.db
+目前使用者的應用程式資料目錄
 ```
 
 ## 常見問題
@@ -322,7 +368,7 @@ run_app.bat
 或打包後的：
 
 ```text
-DrugCards.exe
+DrugFlashcard.exe
 ```
 
 不要直接雙擊 `main.py`。
@@ -368,7 +414,7 @@ DrugCards.exe
 ### 刪除卡片後可以復原嗎？
 
 目前軟體內沒有復原功能。  
-建議定期備份 `data\drug_cards.db`。
+建議定期備份 `drug_cards.db`。
 
 ### 沒有網路可以用嗎？
 
@@ -386,7 +432,10 @@ DrugCards.exe
 ## 給維護者：從原始碼執行
 
 一般使用者不需要看這段。  
-如果你是在原始碼資料夾中維護程式，可以使用：
+
+### Windows 原始碼執行
+
+如果你是在 Windows 原始碼資料夾中維護程式，可以使用：
 
 ```powershell
 .\.venv\Scripts\python.exe main.py
@@ -399,25 +448,82 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-## 給維護者：重新打包成 Windows exe
+### macOS 原始碼執行
+
+請在 macOS 環境執行：
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python main.py
+```
+
+## 給維護者：重新打包
+
+PyInstaller 不是 cross-compiler。
+
+- Windows 的 `.exe` 必須在 Windows 上打包。
+- macOS 的 `.app` 必須在 macOS 上打包。
+- 同一份原始碼可以共用，但發佈檔要分平台產生。
+
+### Windows 打包 exe
 
 ```powershell
 .\build_exe.bat
 ```
 
+等同於：
+
+```powershell
+.\.venv\Scripts\pyinstaller.exe --noconfirm --windowed --name DrugFlashcard main.py
+```
+
 打包完成後，輸出位置通常是：
 
 ```text
-.\dist\DrugCards\DrugCards.exe
+.\dist\DrugFlashcard\DrugFlashcard.exe
 ```
 
 要給別人使用時，請複製整個資料夾：
 
 ```text
-.\dist\DrugCards
+.\dist\DrugFlashcard
 ```
 
 接收方不需要安裝 Python。
+
+### macOS 打包 app
+
+請在 macOS 環境執行：
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pyinstaller --noconfirm --windowed --name DrugFlashcard main.py
+```
+
+或執行：
+
+```bash
+bash build_macos.sh
+```
+
+打包完成後，輸出位置通常是：
+
+```text
+dist/DrugFlashcard.app
+```
+
+目前如果是在 Windows 上開發，只能完成跨平台程式碼與 macOS 打包文件；真正可執行的 `.app` 需要在 macOS 上產生。
+
+### macOS 安全性提示
+
+- 未簽章的 macOS app 可能會被 Gatekeeper 阻擋。
+- 測試版可以請使用者右鍵點 `DrugFlashcard.app`，再選擇 `打開`。
+- 若要正式發佈給客戶，建議之後做 Apple Developer ID 簽章與 notarization。
+- 若要更正式發佈，可以之後再製作 `.dmg`。
 
 ## 給維護者：主要檔案
 
@@ -426,4 +532,6 @@ python -m venv .venv
 - `models.py`：資料結構。
 - `requirements.txt`：需要安裝的套件。
 - `run_app.bat`：在原始碼資料夾中啟動軟體。
-- `build_exe.bat`：打包成 exe。
+- `run_macos.sh`：在 macOS 原始碼資料夾中啟動軟體。
+- `build_exe.bat`：在 Windows 打包成 exe。
+- `build_macos.sh`：在 macOS 打包成 app。
