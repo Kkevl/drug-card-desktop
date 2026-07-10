@@ -87,20 +87,30 @@ EXAM_ITEMS_TABLE = "exam_items"
 EXAM_RESULTS_TABLE = "exam_results"
 EXAM_RESULT_ITEMS_TABLE = "exam_result_items"
 CSV_IMPORT_ENCODINGS = ("utf-8-sig", "utf-8", "cp950", "big5", "gb18030")
-CARD_EXPORT_FIELDNAMES = [
-    "id",
-    "drug_name",
-    "category",
-    "mechanism",
-    "key_points",
-    "side_effects",
-    "note",
-    "familiarity",
-    "review_count",
-    "last_reviewed_at",
-    "created_at",
-    "updated_at",
+CARD_EXPORT_COLUMNS = [
+    ("id", "id"),
+    ("病名", "drug_name"),
+    ("category", "category"),
+    ("病原", "mechanism"),
+    ("傳播方式", "key_points"),
+    ("感染動物", "side_effects"),
+    ("備註", "note"),
+    ("熟悉度", "familiarity"),
+    ("複習次數", "review_count"),
+    ("最後複習時間", "last_reviewed_at"),
+    ("建立時間", "created_at"),
+    ("更新時間", "updated_at"),
 ]
+CARD_EXPORT_FIELDNAMES = [label for label, _field in CARD_EXPORT_COLUMNS]
+CSV_FIELD_ALIASES = {
+    "drug_name": ("drug_name", "病名"),
+    "category": ("category",),
+    "mechanism": ("mechanism", "病原"),
+    "key_points": ("key_points", "傳播方式"),
+    "side_effects": ("side_effects", "感染動物"),
+    "note": ("note", "備註"),
+    "familiarity": ("familiarity", "熟悉度"),
+}
 
 
 class DrugCardDatabase:
@@ -524,7 +534,7 @@ class DrugCardDatabase:
             reader = csv.DictReader(file)
             if not self._csv_fieldnames_are_reasonable(reader.fieldnames):
                 raise ValueError(
-                    "CSV 欄位名稱不符合格式，至少需要 drug_name 欄位。"
+                    "CSV 欄位名稱不符合格式，至少需要病名欄位。"
                 )
             return [
                 {
@@ -541,13 +551,13 @@ class DrugCardDatabase:
             for row in rows:
                 card = DrugCard(
                     id=None,
-                    drug_name=self._csv_text(row.get("drug_name")).strip(),
-                    category=self._csv_text(row.get("category")),
-                    mechanism=self._csv_text(row.get("mechanism")),
-                    key_points=self._csv_text(row.get("key_points")),
-                    side_effects=self._csv_text(row.get("side_effects")),
-                    note=self._csv_text(row.get("note")),
-                    familiarity=self._csv_text(row.get("familiarity")) or DEFAULT_FAMILIARITY,
+                    drug_name=self._csv_value(row, "drug_name").strip(),
+                    category=self._csv_value(row, "category"),
+                    mechanism=self._csv_value(row, "mechanism"),
+                    key_points=self._csv_value(row, "key_points"),
+                    side_effects=self._csv_value(row, "side_effects"),
+                    note=self._csv_value(row, "note"),
+                    familiarity=self._csv_value(row, "familiarity") or DEFAULT_FAMILIARITY,
                 )
                 if not card.drug_name:
                     continue
@@ -571,7 +581,10 @@ class DrugCardDatabase:
             writer.writeheader()
             for card in cards:
                 writer.writerow(
-                    {field: self._csv_text(getattr(card, field)) for field in CARD_EXPORT_FIELDNAMES}
+                    {
+                        label: self._csv_text(getattr(card, field))
+                        for label, field in CARD_EXPORT_COLUMNS
+                    }
                 )
         return len(cards)
 
@@ -586,11 +599,11 @@ class DrugCardDatabase:
         cards = self.list_cards()
         workbook = Workbook()
         sheet = workbook.active
-        sheet.title = "Drug Cards"
+        sheet.title = "疾病卡片"
         sheet.append(CARD_EXPORT_FIELDNAMES)
         for card in cards:
             sheet.append(
-                [self._csv_text(getattr(card, field)) for field in CARD_EXPORT_FIELDNAMES]
+                [self._csv_text(getattr(card, field)) for _label, field in CARD_EXPORT_COLUMNS]
             )
 
         for column_cells in sheet.columns:
@@ -631,11 +644,18 @@ class DrugCardDatabase:
         return str(value)
 
     @staticmethod
+    def _csv_value(row: Dict[str, str], field: str) -> str:
+        for alias in CSV_FIELD_ALIASES[field]:
+            if alias in row:
+                return DrugCardDatabase._csv_text(row.get(alias))
+        return ""
+
+    @staticmethod
     def _csv_fieldnames_are_reasonable(fieldnames: Optional[List[str]]) -> bool:
         if not fieldnames:
             return False
         normalized = {str(field).strip().lstrip("\ufeff") for field in fieldnames}
-        return "drug_name" in normalized
+        return any(alias in normalized for alias in CSV_FIELD_ALIASES["drug_name"])
 
     @staticmethod
     def _normal_familiarity(value: str) -> str:

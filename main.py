@@ -40,7 +40,7 @@ from database import DB_PATH, DrugCardDatabase
 from models import DEFAULT_FAMILIARITY, FAMILIARITY_LEVELS, DrugCard, ExamItem, ExamQuestion
 
 
-APP_TITLE = "藥物記憶卡"
+APP_TITLE = "病名記憶卡"
 
 
 def normalize_answer(value: str) -> str:
@@ -54,7 +54,7 @@ class DrugCardDialog(QDialog):
         card: Optional[DrugCard] = None,
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle("編輯藥物" if card else "新增藥物")
+        self.setWindowTitle("編輯病名" if card else "新增病名")
         self.setMinimumWidth(560)
         self.card = card
 
@@ -77,13 +77,13 @@ class DrugCardDialog(QDialog):
             text_edit.setAcceptRichText(False)
 
         form = QFormLayout()
-        form.addRow("drug_name", self.drug_name_input)
+        form.addRow("病名", self.drug_name_input)
         form.addRow("category", self.category_input)
-        form.addRow("mechanism", self.mechanism_input)
-        form.addRow("key_points", self.key_points_input)
-        form.addRow("side_effects", self.side_effects_input)
-        form.addRow("note", self.note_input)
-        form.addRow("familiarity", self.familiarity_input)
+        form.addRow("病原", self.mechanism_input)
+        form.addRow("傳播方式", self.key_points_input)
+        form.addRow("感染動物", self.side_effects_input)
+        form.addRow("備註", self.note_input)
+        form.addRow("熟悉度", self.familiarity_input)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
@@ -121,7 +121,7 @@ class DrugCardDialog(QDialog):
 
     def accept(self) -> None:
         if not self.drug_name_input.text().strip():
-            QMessageBox.warning(self, "欄位不足", "drug_name 為必填欄位。")
+            QMessageBox.warning(self, "欄位不足", "病名為必填欄位。")
             self.drug_name_input.setFocus()
             return
         super().accept()
@@ -228,7 +228,7 @@ class ExamItemManagerDialog(QDialog):
         button_layout.addWidget(close_button)
 
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("選擇藥物卡片"))
+        layout.addWidget(QLabel("選擇病名卡片"))
         layout.addWidget(self.card_combo)
         layout.addWidget(hint)
         layout.addWidget(self.item_list, 1)
@@ -265,12 +265,12 @@ class ExamItemManagerDialog(QDialog):
         card_id = self.current_card_id()
         if card_id is None:
             self.items = []
-            self.item_list.addItem("目前沒有藥物卡片。請先新增藥物。")
+            self.item_list.addItem("目前沒有病名卡片。請先新增病名。")
             return
 
         self.items = self.db.list_exam_items(card_id)
         if not self.items:
-            self.item_list.addItem("此藥物尚未設定考試項目。")
+            self.item_list.addItem("此病名尚未設定考試項目。")
             return
 
         for item in self.items:
@@ -283,7 +283,7 @@ class ExamItemManagerDialog(QDialog):
     def add_item(self) -> None:
         card_id = self.current_card_id()
         if card_id is None:
-            QMessageBox.information(self, "沒有卡片", "請先新增藥物卡片。")
+            QMessageBox.information(self, "沒有卡片", "請先新增病名卡片。")
             return
         dialog = ExamItemDialog(self, card_id)
         if dialog.exec() != QDialog.Accepted:
@@ -327,7 +327,7 @@ class SettingsDialog(QDialog):
         self.setWindowTitle("設定")
         self.setMinimumWidth(380)
 
-        add_button = QPushButton("新增藥物")
+        add_button = QPushButton("新增病名")
         edit_button = QPushButton("編輯目前卡片")
         delete_button = QPushButton("刪除目前卡片")
         exam_items_button = QPushButton("考試項目管理")
@@ -467,7 +467,7 @@ class MainWindow(QMainWindow):
 
     def _build_review_page(self) -> None:
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("搜尋 drug_name")
+        self.search_input.setPlaceholderText("搜尋病名")
         self.search_input.textChanged.connect(self.apply_filters)
 
         self.category_combo = QComboBox()
@@ -764,9 +764,9 @@ class MainWindow(QMainWindow):
 
     def _render_empty_state(self) -> None:
         total_count = self.db.count_cards()
-        self.title_label.setText("沒有可顯示的藥物卡")
+        self.title_label.setText("沒有可顯示的病名卡")
         if total_count == 0:
-            self.detail_label.setText("目前資料庫是空的。請到設定新增藥物或匯入 CSV。")
+            self.detail_label.setText("目前資料庫是空的。請到設定新增病名或匯入 CSV。")
         else:
             self.detail_label.setText("目前搜尋、分類或只複習不熟條件下沒有符合的卡片。")
         self.detail_scroll.setVisible(True)
@@ -836,9 +836,9 @@ class MainWindow(QMainWindow):
     def _format_back_html(self, card: DrugCard) -> str:
         fields = (
             ("分類", card.category),
-            ("藥物的機制", card.mechanism),
-            ("考點", card.key_points),
-            ("副作用", card.side_effects),
+            ("病原", card.mechanism),
+            ("傳播方式", card.key_points),
+            ("感染動物", card.side_effects),
             ("備註", card.note),
         )
         sections = []
@@ -972,14 +972,14 @@ class MainWindow(QMainWindow):
         QMessageBox.information(
             self,
             "匯入完成",
-            f"已使用 {encoding} 匯入 {imported_count} 張卡片。",
+            f"已使用 {encoding} 匯入 {imported_count} 張病名卡片。",
         )
 
     def export_csv(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
             self,
             "匯出 CSV 檔案",
-            "drug_cards_export.csv",
+            "disease_cards_export.csv",
             "CSV Files (*.csv);;All Files (*)",
         )
         if not path:
@@ -996,14 +996,14 @@ class MainWindow(QMainWindow):
         QMessageBox.information(
             self,
             "匯出完成",
-            f"已匯出 {exported_count} 張卡片。\n已用 UTF-8 BOM 格式匯出，建議用 Excel 開啟。",
+            f"已匯出 {exported_count} 張病名卡片。\n已用 UTF-8 BOM 格式匯出，建議用 Excel 開啟。",
         )
 
     def export_xlsx(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
             self,
             "匯出 Excel 檔案",
-            "drug_cards_export.xlsx",
+            "disease_cards_export.xlsx",
             "Excel Files (*.xlsx);;All Files (*)",
         )
         if not path:
@@ -1020,7 +1020,7 @@ class MainWindow(QMainWindow):
         QMessageBox.information(
             self,
             "匯出完成",
-            f"已匯出 {exported_count} 張卡片。\n已匯出 Excel 檔案，建議優先使用此格式避免中文亂碼。",
+            f"已匯出 {exported_count} 張病名卡片。\n已匯出 Excel 檔案，建議優先使用此格式避免中文亂碼。",
         )
 
     def _clear_exam_answer_form(self) -> None:
