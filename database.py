@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import csv
-import os
-import platform
-import shutil
+import json
 import sqlite3
 import sys
 from datetime import datetime
@@ -15,47 +13,36 @@ from typing import Dict, List, Optional, Tuple, Union
 from models import DEFAULT_FAMILIARITY, FAMILIARITY_LEVELS, DrugCard, ExamItem
 
 
-APP_DATA_FOLDER_NAME = "DrugFlashcard"
 DATABASE_FILENAME = "drug_cards.db"
 
 
 def app_base_dir() -> Path:
     if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve().parent
+        executable = Path(sys.executable).resolve()
+        for parent in executable.parents:
+            if parent.suffix == ".app":
+                return parent.parent
+        return executable.parent
     return Path(__file__).resolve().parent
-
-
-def user_data_dir() -> Path:
-    system = platform.system()
-    if system == "Windows":
-        appdata = os.environ.get("APPDATA")
-        base_dir = Path(appdata) if appdata else Path.home()
-        return base_dir / APP_DATA_FOLDER_NAME
-    if system == "Darwin":
-        return Path.home() / "Library" / "Application Support" / APP_DATA_FOLDER_NAME
-    return Path.home() / ".local" / "share" / APP_DATA_FOLDER_NAME
 
 
 def resolve_database_path() -> Path:
     base_dir = app_base_dir()
-    target_dir = user_data_dir()
-    target_db = target_dir / DATABASE_FILENAME
-    legacy_candidates = (
-        base_dir / "data" / DATABASE_FILENAME,
-        base_dir / DATABASE_FILENAME,
-    )
+    _ensure_directory_writable(base_dir)
+    return base_dir / DATABASE_FILENAME
 
-    target_dir.mkdir(parents=True, exist_ok=True)
-    legacy_db = next((path for path in legacy_candidates if path.exists()), None)
-    if legacy_db and (
-        not target_db.exists()
-        or (
-            _database_card_count(target_db) == 0
-            and _database_card_count(legacy_db) > 0
-        )
-    ):
-        shutil.copy2(legacy_db, target_db)
-    return target_db
+
+def _ensure_directory_writable(directory: Path) -> None:
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+        probe = directory / ".write_test.tmp"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
+    except OSError as exc:
+        raise PermissionError(
+            "目前資料夾無法寫入資料庫。請把整個軟體資料夾移到可寫入的位置，"
+            "例如桌面、文件資料夾或使用者擁有權限的資料夾後再開啟。"
+        ) from exc
 
 
 def _database_card_count(db_path: Path) -> int:
@@ -80,7 +67,7 @@ def _database_card_count(db_path: Path) -> int:
         return 0
 
 
-DB_PATH = user_data_dir() / DATABASE_FILENAME
+DB_PATH = app_base_dir() / DATABASE_FILENAME
 TABLE_NAME = "cards"
 LEGACY_TABLE_NAME = "drug_cards"
 EXAM_ITEMS_TABLE = "exam_items"
@@ -111,6 +98,7 @@ CSV_FIELD_ALIASES = {
     "note": ("note", "備註"),
     "familiarity": ("familiarity", "熟悉度"),
 }
+DATASET_FORMAT_VERSION = 1
 
 
 class DrugCardDatabase:
@@ -498,6 +486,267 @@ class DrugCardDatabase:
                     (self._familiarity_from_accuracy(card_accuracy), card_id),
                 )
             return result_id
+
+    def export_dataset(self, dataset_path: Union[Path, str]) -> int:
+        cards = self.list_cards()
+        dataset_cards = []
+        for card in cards:
+            if card.id is None:
+                continue
+            dataset_cards.append(
+                {
+                    "病名": card.drug_name,
+                    "category": card.category,
+                    "病原": card.mechanism,
+                    "傳播方式": card.key_points,
+                    "感染動物": card.side_effects,
+                    "備註": card.note,
+                    "熟悉度": self._normal_familiarity(card.familiarity),
+                    "exam_items": [
+                        {
+                            "項目名稱": item.item_name,
+                            "標準答案": item.expected_answer,
+                            "分數": max(1, int(item.points or 1)),
+                        }
+                        for item in self.list_exam_items(card.id)
+                    ],
+                }
+            )
+
+        payload = {
+            "format_version": DATASET_FORMAT_VERSION,
+            "cards": dataset_cards,
+        }
+        Path(dataset_path).write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        return len(dataset_cards)
+
+    def import_dataset(self, dataset_path: Union[Path, str]) -> Dict[str, int]:
+        payload = json.loads(Path(dataset_path).read_text(encoding="utf-8-sig"))
+        if not isinstance(payload, dict):
+            raise ValueError("資料集格式不正確。")
+        if int(payload.get("format_version", 0) or 0) != DATASET_FORMAT_VERSION:
+            raise ValueError("不支援的資料集版本。")
+        cards = payload.get("cards")
+        if not isinstance(cards, list):
+            raise ValueError("資料集缺少 cards 清單。")
+        return self._import_dataset_cards(cards)
+
+    def merge_database(self, db_path: Union[Path, str]) -> Dict[str, int]:
+        source_path = Path(db_path)
+        if not source_path.exists():
+            raise FileNotFoundError("找不到要匯入的 DB 檔案。")
+        if source_path.resolve() == self.db_path.resolve():
+            raise ValueError("不能匯入目前正在使用的同一個資料庫。")
+
+        try:
+            with sqlite3.connect(source_path) as source_conn:
+                source_conn.row_factory = sqlite3.Row
+                self._validate_merge_database(source_conn)
+                cards = self._dataset_cards_from_connection(source_conn)
+        except sqlite3.Error as exc:
+            raise ValueError("無法讀取 DB 檔案，請確認這是有效的 drug_cards.db。") from exc
+        return self._import_dataset_cards(cards)
+
+    def _import_dataset_cards(self, cards: List[object]) -> Dict[str, int]:
+        stats = {"added_cards": 0, "skipped_cards": 0, "added_exam_items": 0}
+        with self.connect() as conn:
+            existing_names = self._existing_card_names(conn)
+            for raw_card in cards:
+                if not isinstance(raw_card, dict):
+                    continue
+                card = self._card_from_dataset(raw_card)
+                if not card.drug_name:
+                    continue
+                normalized_name = self._normalize_card_name(card.drug_name)
+                if normalized_name in existing_names:
+                    stats["skipped_cards"] += 1
+                    continue
+
+                cursor = conn.execute(
+                    f"""
+                    INSERT INTO {TABLE_NAME} (
+                        drug_name, category, mechanism, key_points, side_effects,
+                        note, familiarity, review_count, last_reviewed_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    self._card_values(card, include_review=True),
+                )
+                new_card_id = int(cursor.lastrowid)
+                existing_names.add(normalized_name)
+                stats["added_cards"] += 1
+                stats["added_exam_items"] += self._insert_dataset_exam_items(
+                    conn,
+                    new_card_id,
+                    raw_card.get("exam_items", []),
+                )
+        return stats
+
+    def _insert_dataset_exam_items(
+        self,
+        conn: sqlite3.Connection,
+        card_id: int,
+        raw_items: object,
+    ) -> int:
+        if not isinstance(raw_items, list):
+            return 0
+        added_count = 0
+        for raw_item in raw_items:
+            if not isinstance(raw_item, dict):
+                continue
+            item_name = self._dataset_text(raw_item, "項目名稱", "item_name").strip()
+            expected_answer = self._dataset_text(
+                raw_item,
+                "標準答案",
+                "expected_answer",
+            ).strip()
+            if not item_name or not expected_answer:
+                continue
+            conn.execute(
+                f"""
+                INSERT INTO {EXAM_ITEMS_TABLE} (
+                    card_id, item_name, expected_answer, points
+                )
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    card_id,
+                    item_name,
+                    expected_answer,
+                    max(1, self._dataset_int(raw_item, "分數", "points")),
+                ),
+            )
+            added_count += 1
+        return added_count
+
+    def _dataset_cards_from_connection(
+        self,
+        conn: sqlite3.Connection,
+    ) -> List[Dict[str, object]]:
+        rows = conn.execute(
+            f"""
+            SELECT id, drug_name, category, mechanism, key_points, side_effects, note,
+                   familiarity
+            FROM {TABLE_NAME}
+            ORDER BY id ASC
+            """
+        ).fetchall()
+        cards: List[Dict[str, object]] = []
+        exam_items_available = self._table_exists(conn, EXAM_ITEMS_TABLE)
+        for row in rows:
+            exam_items: List[Dict[str, object]] = []
+            if exam_items_available:
+                item_rows = conn.execute(
+                    f"""
+                    SELECT item_name, expected_answer, points
+                    FROM {EXAM_ITEMS_TABLE}
+                    WHERE card_id = ?
+                    ORDER BY id ASC
+                    """,
+                    (row["id"],),
+                ).fetchall()
+                exam_items = [
+                    {
+                        "項目名稱": item["item_name"],
+                        "標準答案": item["expected_answer"],
+                        "分數": int(item["points"] or 1),
+                    }
+                    for item in item_rows
+                ]
+            cards.append(
+                {
+                    "病名": row["drug_name"],
+                    "category": row["category"],
+                    "病原": row["mechanism"],
+                    "傳播方式": row["key_points"],
+                    "感染動物": row["side_effects"],
+                    "備註": row["note"],
+                    "熟悉度": row["familiarity"],
+                    "exam_items": exam_items,
+                }
+            )
+        return cards
+
+    def _validate_merge_database(self, conn: sqlite3.Connection) -> None:
+        if not self._table_exists(conn, TABLE_NAME):
+            raise ValueError("DB 檔案缺少 cards 資料表。")
+        existing_columns = {
+            row["name"] for row in conn.execute(f"PRAGMA table_info({TABLE_NAME})")
+        }
+        required_columns = {
+            "id",
+            "drug_name",
+            "category",
+            "mechanism",
+            "key_points",
+            "side_effects",
+            "note",
+            "familiarity",
+        }
+        missing = required_columns - existing_columns
+        if missing:
+            raise ValueError("DB 檔案格式不符合目前版本。")
+
+    @staticmethod
+    def _table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
+        row = conn.execute(
+            """
+            SELECT 1
+            FROM sqlite_master
+            WHERE type = 'table' AND name = ?
+            LIMIT 1
+            """,
+            (table_name,),
+        ).fetchone()
+        return bool(row)
+
+    @staticmethod
+    def _existing_card_names(conn: sqlite3.Connection) -> set:
+        rows = conn.execute(f"SELECT drug_name FROM {TABLE_NAME}").fetchall()
+        return {
+            DrugCardDatabase._normalize_card_name(row["drug_name"])
+            for row in rows
+            if row["drug_name"]
+        }
+
+    @staticmethod
+    def _normalize_card_name(value: str) -> str:
+        return str(value).strip()
+
+    def _card_from_dataset(self, raw_card: Dict[str, object]) -> DrugCard:
+        return DrugCard(
+            id=None,
+            drug_name=self._dataset_text(raw_card, "病名", "drug_name").strip(),
+            category=self._dataset_text(raw_card, "category"),
+            mechanism=self._dataset_text(raw_card, "病原", "mechanism"),
+            key_points=self._dataset_text(raw_card, "傳播方式", "key_points"),
+            side_effects=self._dataset_text(raw_card, "感染動物", "side_effects"),
+            note=self._dataset_text(raw_card, "備註", "note"),
+            familiarity=(
+                self._dataset_text(raw_card, "熟悉度", "familiarity")
+                or DEFAULT_FAMILIARITY
+            ),
+        )
+
+    @staticmethod
+    def _dataset_text(data: Dict[str, object], *keys: str) -> str:
+        for key in keys:
+            if key in data:
+                return DrugCardDatabase._csv_text(data.get(key))
+        return ""
+
+    @staticmethod
+    def _dataset_int(data: Dict[str, object], *keys: str) -> int:
+        for key in keys:
+            if key in data:
+                try:
+                    return int(data.get(key) or 1)
+                except (TypeError, ValueError):
+                    return 1
+        return 1
 
     def import_csv(self, csv_path: Union[Path, str]) -> Tuple[int, str]:
         csv_file = Path(csv_path)

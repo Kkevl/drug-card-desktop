@@ -2,3 +2,8 @@
 build/*
 dist/DrugCards/data/*
 .vscode/*
+test_name_only.db
+.gitignore
+dist/DrugCards/_internal/*
+test_normal_full.db
+dist/DrugFlashcard/drug_cards.db

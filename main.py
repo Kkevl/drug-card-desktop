@@ -335,6 +335,9 @@ class SettingsDialog(QDialog):
         import_button = QPushButton("匯入 CSV")
         export_button = QPushButton("匯出 CSV")
         export_xlsx_button = QPushButton("匯出 Excel .xlsx")
+        export_dataset_button = QPushButton("匯出資料集")
+        import_dataset_button = QPushButton("匯入資料集")
+        merge_db_button = QPushButton("匯入 DB 並合併")
         close_button = QPushButton("關閉")
 
         add_button.clicked.connect(self.main_window.add_card)
@@ -345,6 +348,9 @@ class SettingsDialog(QDialog):
         import_button.clicked.connect(self.main_window.import_csv)
         export_button.clicked.connect(self.main_window.export_csv)
         export_xlsx_button.clicked.connect(self.main_window.export_xlsx)
+        export_dataset_button.clicked.connect(self.main_window.export_dataset)
+        import_dataset_button.clicked.connect(self.main_window.import_dataset)
+        merge_db_button.clicked.connect(self.main_window.merge_database)
         close_button.clicked.connect(self.accept)
 
         layout = QVBoxLayout(self)
@@ -365,6 +371,10 @@ class SettingsDialog(QDialog):
         layout.addWidget(import_button)
         layout.addWidget(export_button)
         layout.addWidget(export_xlsx_button)
+        layout.addSpacing(12)
+        layout.addWidget(export_dataset_button)
+        layout.addWidget(import_dataset_button)
+        layout.addWidget(merge_db_button)
         layout.addStretch()
         layout.addWidget(close_button)
 
@@ -696,10 +706,14 @@ class MainWindow(QMainWindow):
         QMessageBox.information(
             self,
             "資料庫說明",
-            "目前資料會儲存在目前使用者的應用程式資料目錄，不會寫入 exe 或 app bundle 內。\n\n"
+            "目前資料會儲存在軟體所在資料夾中的 drug_cards.db。\n\n"
             f"目前使用的資料庫：\n{DB_PATH}\n\n"
             "一般使用者建議用軟體內的設定功能新增、編輯、刪除資料，"
             "或使用 CSV 匯入 / 匯出大量編輯。\n\n"
+            "若要和其他使用者分享病名卡片與考試項目，請使用「匯出資料集」與「匯入資料集」。\n"
+            "若對方給的是 drug_cards.db，請使用「匯入 DB 並合併」。\n\n"
+            "如果軟體所在資料夾無法寫入，請把整個軟體資料夾移到桌面、文件資料夾"
+            "或其他有權限的位置後再開啟。\n\n"
             "備份資料：關閉軟體後，複製上方顯示的 drug_cards.db 到安全位置。\n\n"
             "更換資料庫：關閉軟體後，用另一個 drug_cards.db 覆蓋上方顯示的檔案，再重新開啟軟體。",
         )
@@ -1021,6 +1035,81 @@ class MainWindow(QMainWindow):
             self,
             "匯出完成",
             f"已匯出 {exported_count} 張病名卡片。\n已匯出 Excel 檔案，建議優先使用此格式避免中文亂碼。",
+        )
+
+    def export_dataset(self) -> None:
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "匯出資料集",
+            "disease_dataset.json",
+            "JSON Files (*.json);;All Files (*)",
+        )
+        if not path:
+            return
+        if not path.lower().endswith(".json"):
+            path = f"{path}.json"
+
+        try:
+            exported_count = self.db.export_dataset(path)
+        except Exception as exc:
+            QMessageBox.critical(self, "匯出失敗", f"資料集匯出失敗：\n{exc}")
+            return
+
+        QMessageBox.information(
+            self,
+            "匯出完成",
+            f"已匯出 {exported_count} 張病名卡片與其考試項目。",
+        )
+
+    def import_dataset(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "選擇資料集 JSON 檔案",
+            "",
+            "JSON Files (*.json);;All Files (*)",
+        )
+        if not path:
+            return
+
+        try:
+            stats = self.db.import_dataset(path)
+        except Exception as exc:
+            QMessageBox.critical(self, "匯入失敗", f"資料集匯入失敗：\n{exc}")
+            return
+
+        self._refresh_after_external_import()
+        self._show_import_stats("資料集匯入完成", stats)
+
+    def merge_database(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "選擇要合併的 DB 檔案",
+            "",
+            "Database Files (*.db);;All Files (*)",
+        )
+        if not path:
+            return
+
+        try:
+            stats = self.db.merge_database(path)
+        except Exception as exc:
+            QMessageBox.critical(self, "合併失敗", f"DB 合併失敗：\n{exc}")
+            return
+
+        self._refresh_after_external_import()
+        self._show_import_stats("DB 合併完成", stats)
+
+    def _refresh_after_external_import(self) -> None:
+        self.reload_categories()
+        self.refresh_cards()
+
+    def _show_import_stats(self, title: str, stats: Dict[str, int]) -> None:
+        QMessageBox.information(
+            self,
+            title,
+            "新增病名卡片：{added_cards}\n"
+            "跳過重複病名：{skipped_cards}\n"
+            "新增考試項目：{added_exam_items}".format(**stats),
         )
 
     def _clear_exam_answer_form(self) -> None:
