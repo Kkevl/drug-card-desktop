@@ -147,32 +147,7 @@ macOS 原始碼執行需要 Python 3.9 或更新版本。
 2. 用 `匯出 CSV` 把資料匯出，用 Excel 編輯後，再用 `匯入 CSV` 匯回來。
 3. 如果要和別人共用病名卡片與考試項目，使用 `匯出資料集`、`匯入資料集` 或 `匯入 DB 並合併`。
 
-資料庫檔案名稱是：
-
-```text
-drug_cards.db
-```
-
-資料庫會放在軟體所在資料夾內，也就是和 `DrugFlashcard.exe`、`main.py` 或啟動腳本同一層。
-
-Windows 範例：
-
-```text
-DrugFlashcard\drug_cards.db
-```
-
-macOS 範例：
-
-```text
-DrugFlashcard.app 所在資料夾/drug_cards.db
-```
-
-請注意：
-
-- 不建議在軟體開啟時直接修改 `drug_cards.db`。
-- 如果要複製、覆蓋或備份資料庫，請先關閉軟體。
-- 如果軟體所在資料夾無法寫入，請把整個軟體資料夾移到桌面、文件資料夾或其他有權限的位置。
-- 如果你不知道怎麼直接編輯資料庫，請使用軟體內建的匯入 / 匯出功能，這對一般使用者最安全。
+資料庫檔案位置請看後面的「資料存在哪裡」。
 
 ## 考試模式怎麼用
 
@@ -384,7 +359,8 @@ CSV 可以用 Excel、Google Sheets 或文字編輯器開啟。
 
 ## 資料存在哪裡
 
-資料會存在軟體所在資料夾中的 `drug_cards.db`。
+資料會存在軟體所在資料夾中的 `drug_cards.db`。  
+也就是和 `DrugFlashcard.exe`、`main.py` 或啟動腳本同一層。
 
 Windows：
 
@@ -395,11 +371,11 @@ DrugFlashcard\drug_cards.db
 macOS：
 
 ```text
-DrugFlashcard.app 所在資料夾/drug_cards.db
+DrugFlashcard.app 同一層資料夾/drug_cards.db
 ```
 
 請不要隨便刪除這個檔案。  
-如果要備份資料，可以複製上方位置的 `drug_cards.db` 到安全的位置。
+如果要備份資料，可以複製這個 `drug_cards.db` 到安全的位置。
 
 如果你第一次開啟軟體，程式會自動建立資料夾、資料庫與資料表。  
 如果你想使用別人的資料，建議用 `匯入資料集` 或 `匯入 DB 並合併`。  
